@@ -1,4 +1,4 @@
-# Copyright 2025 Tobias Polzer & Beyond Development
+# Copyright 2025 Tobias Polzer & BeyondDevWorks
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -82,9 +82,18 @@ CONFIG_PATH = os.path.join(APPDATA_DIR, CONFIG_FILENAME)
 print("Config wird gespeichert unter:", CONFIG_PATH)
 
 SUPPORTED_FORMATS = (".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac")
-APP_VERSION = "0.1.45"
+APP_VERSION = "0.1.5"
 FORCE_UPDATE_CHECK = False  # Für Development True setzen
 GITHUB_REPO = "BeyondDevWorks/BDW-BeyondMusic"  # GitHub User/Repo
+
+DEFAULT_SETTINGS = {
+    "volume": 80,
+    "shuffle": False,
+    "repeat": False,
+    "last_playlist": [],
+    "eq_values": [0] * 10,
+    "eq_preset": "Neutral"
+}
 
 DWMWA_USE_IMMERSIVE_DARK_MODE = 20  # für neuere Windows-Versionen
 
@@ -478,10 +487,10 @@ class InfoTab(QWidget):
         w_layout.addWidget(header)
 
         # Karten
-        w_layout.addWidget(InfoCard("App-Version", "#-6MVXZPR2A9OA8XKAPA8T-v.0.1.45"))
+        w_layout.addWidget(InfoCard("App-Version", "#-FERBCEQIGU0D85GAAWI9-v.0.1.5"))
         w_layout.addWidget(InfoCard("Entwickler", "BeyondDevWorks & Tobias Polzer"))
         w_layout.addWidget(InfoCard("Lizenz", "MIT"))
-        w_layout.addWidget(InfoCard("Letztes Update", "2025-08-25"))
+        w_layout.addWidget(InfoCard("Letztes Update", "2025-08-26"))
         w_layout.addWidget(InfoCard("Support", "https://beyonddevworks.github.io/BDW-Site/#contact"))
 
         w_layout.addStretch()
@@ -748,8 +757,9 @@ class OverseerPlayer(QMainWindow):
         self._old_volume = 100            # für Mute/Unmute
 
         # settings
-        self.settings = {"volume": 80, "shuffle": False, "repeat": False, "last_playlist": []}
+        self.settings = DEFAULT_SETTINGS.copy()
         self.load_settings()
+
 
         # UI build
         self._build_ui()
@@ -765,14 +775,6 @@ class OverseerPlayer(QMainWindow):
         self.player.audio_set_volume(self.volume_slider.value())
         self.shuffle_btn.setChecked(self.settings.get("shuffle", False))
         self.repeat_btn.setChecked(self.settings.get("repeat", False))
-
-        # restore playlist
-        if self.settings.get("last_playlist"):
-            valid = [p for p in self.settings["last_playlist"] if os.path.exists(p)]
-            if valid:
-                self.load_playlist(valid)
-
-        self.setAcceptDrops(True)
 
     def _build_ui(self):
         root = QWidget()
@@ -857,6 +859,21 @@ class OverseerPlayer(QMainWindow):
         self.playlist_widget.setSpacing(6)
         self.playlist_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         p_layout.addWidget(self.playlist_widget, stretch=3)
+
+                # restore playlist
+        last_playlist = self.settings.get("last_playlist", [])
+        print("DEBUG: last_playlist =", last_playlist)
+
+        valid = [p for p in last_playlist if os.path.exists(p) and p.lower().endswith(SUPPORTED_FORMATS)]
+        print("DEBUG: valid playlist =", valid)
+
+        if valid:
+            self.load_playlist(valid)
+            print("DEBUG: Playlist restored.")
+        else:
+            print("DEBUG: No valid playlist to restore.")
+
+        self.setAcceptDrops(True)
 
         # right panel with cover/meta
         right_panel = QVBoxLayout()
@@ -1844,9 +1861,11 @@ class OverseerPlayer(QMainWindow):
         if os.path.exists(CONFIG_PATH):
             try:
                 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                    self.settings.update(json.load(f))
-            except Exception:
-                pass
+                    loaded = json.load(f)
+                    print("DEBUG: Settings erfolgreich geladen:", loaded)
+                    self.settings.update(loaded)  # <- update, nicht ersetzen!
+            except Exception as e:
+                print("ERROR loading settings:", e)
 
     # ---------------- Exit ----------------
     def closeEvent(self, event):
