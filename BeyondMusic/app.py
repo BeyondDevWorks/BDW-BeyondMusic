@@ -16,16 +16,21 @@ import random
 import ctypes
 from pathlib import Path
 from io import BytesIO
+import webbrowser
+import requests  # musst du in requirements aufnehmen
+from packaging import version
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QListWidget,
     QListWidgetItem, QHBoxLayout, QVBoxLayout, QFileDialog, QSlider,
-    QMessageBox, QSizePolicy, QFrame, QTabWidget, QLineEdit
+    QMessageBox, QSizePolicy, QFrame, QTabWidget, QLineEdit, QStyle, 
+    QTabBar, QProgressBar, QComboBox, QStyleOptionSlider, QScrollArea, QGridLayout, QGraphicsDropShadowEffect
 )
-from PySide6.QtCore import Qt, QTimer, QSize, Signal
-from PySide6.QtGui import QPixmap, QIcon, QPainter, QColor, QFont
+from PySide6.QtCore import Qt, QTimer, QSize, Signal, QPropertyAnimation, QVariantAnimation, QUrl
+from PySide6.QtGui import QPixmap, QIcon, QPainter, QColor, QFont, QFontMetrics, QPainterPath, QBrush
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtSvg import QSvgRenderer
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # import vlc
 def get_root_path():
@@ -77,7 +82,9 @@ CONFIG_PATH = os.path.join(APPDATA_DIR, CONFIG_FILENAME)
 print("Config wird gespeichert unter:", CONFIG_PATH)
 
 SUPPORTED_FORMATS = (".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac")
-
+APP_VERSION = "0.1.45"
+FORCE_UPDATE_CHECK = False  # Für Development True setzen
+GITHUB_REPO = "BeyondDevWorks/BDW-BeyondMusic"  # GitHub User/Repo
 
 DWMWA_USE_IMMERSIVE_DARK_MODE = 20  # für neuere Windows-Versionen
 
@@ -97,6 +104,8 @@ SVG_REPEAT = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><p
 SVG_DELETE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="#FFFFFF" d="M232.7 69.9L224 96L128 96C110.3 96 96 110.3 96 128C96 145.7 110.3 160 128 160L512 160C529.7 160 544 145.7 544 128C544 110.3 529.7 96 512 96L416 96L407.3 69.9C402.9 56.8 390.7 48 376.9 48L263.1 48C249.3 48 237.1 56.8 232.7 69.9zM512 208L128 208L149.1 531.1C150.7 556.4 171.7 576 197 576L443 576C468.3 576 489.3 556.4 490.9 531.1L512 208z"/></svg>"""
 SVG_VOLUME = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="#FFFFFF" d="M533.6 96.5C523.3 88.1 508.2 89.7 499.8 100C491.4 110.3 493 125.4 503.3 133.8C557.5 177.8 592 244.8 592 320C592 395.2 557.5 462.2 503.3 506.3C493 514.7 491.5 529.8 499.8 540.1C508.1 550.4 523.3 551.9 533.6 543.6C598.5 490.7 640 410.2 640 320C640 229.8 598.5 149.2 533.6 96.5zM473.1 171C462.8 162.6 447.7 164.2 439.3 174.5C430.9 184.8 432.5 199.9 442.8 208.3C475.3 234.7 496 274.9 496 320C496 365.1 475.3 405.3 442.8 431.8C432.5 440.2 431 455.3 439.3 465.6C447.6 475.9 462.8 477.4 473.1 469.1C516.3 433.9 544 380.2 544 320.1C544 260 516.3 206.3 473.1 171.1zM412.6 245.5C402.3 237.1 387.2 238.7 378.8 249C370.4 259.3 372 274.4 382.3 282.8C393.1 291.6 400 305 400 320C400 335 393.1 348.4 382.3 357.3C372 365.7 370.5 380.8 378.8 391.1C387.1 401.4 402.3 402.9 412.6 394.6C434.1 376.9 448 350.1 448 320C448 289.9 434.1 263.1 412.6 245.5zM80 416L128 416L262.1 535.2C268.5 540.9 276.7 544 285.2 544C304.4 544 320 528.4 320 509.2L320 130.8C320 111.6 304.4 96 285.2 96C276.7 96 268.5 99.1 262.1 104.8L128 224L80 224C53.5 224 32 245.5 32 272L32 368C32 394.5 53.5 416 80 416z"/></svg>"""
 SVG_REMOVEALL = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="#FFFFFF" d="M232.7 69.9L224 96L128 96C110.3 96 96 110.3 96 128C96 145.7 110.3 160 128 160L512 160C529.7 160 544 145.7 544 128C544 110.3 529.7 96 512 96L416 96L407.3 69.9C402.9 56.8 390.7 48 376.9 48L263.1 48C249.3 48 237.1 56.8 232.7 69.9zM512 208L128 208L149.1 531.1C150.7 556.4 171.7 576 197 576L443 576C468.3 576 489.3 556.4 490.9 531.1L512 208z"/></svg>"""
+SVG_STOPALL = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="#FFFFFF" d="M320 576C461.4 576 576 461.4 576 320C576 178.6 461.4 64 320 64C178.6 64 64 178.6 64 320C64 461.4 178.6 576 320 576zM256 224L384 224C401.7 224 416 238.3 416 256L416 384C416 401.7 401.7 416 384 416L256 416C238.3 416 224 401.7 224 384L224 256C224 238.3 238.3 224 256 224z"/></svg>"""
+SVG_UPDATEBTN = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="#63E6BE" d="M384 64C366.3 64 352 78.3 352 96C352 113.7 366.3 128 384 128L466.7 128L265.3 329.4C252.8 341.9 252.8 362.2 265.3 374.7C277.8 387.2 298.1 387.2 310.6 374.7L512 173.3L512 256C512 273.7 526.3 288 544 288C561.7 288 576 273.7 576 256L576 96C576 78.3 561.7 64 544 64L384 64zM144 160C99.8 160 64 195.8 64 240L64 496C64 540.2 99.8 576 144 576L400 576C444.2 576 480 540.2 480 496L480 416C480 398.3 465.7 384 448 384C430.3 384 416 398.3 416 416L416 496C416 504.8 408.8 512 400 512L144 512C135.2 512 128 504.8 128 496L128 240C128 231.2 135.2 224 144 224L224 224C241.7 224 256 209.7 256 192C256 174.3 241.7 160 224 160L144 160z"/></svg>"""
 
 
 def svg_to_icon(svg_str: str, size: int = 64, color: str = "#FFFFFF") -> QIcon:
@@ -111,22 +120,172 @@ def svg_to_icon(svg_str: str, size: int = 64, color: str = "#FFFFFF") -> QIcon:
     return QIcon(pix)
 
 
-def make_default_cover(size=200, text="Cover"):
+
+def make_default_cover(size=256, text="Cover"):
     pix = QPixmap(size, size)
-    pix.fill(QColor("#1f2937"))
+    pix.fill(Qt.transparent)
+
     p = QPainter(pix)
     p.setRenderHint(QPainter.Antialiasing)
+
+    # Hintergrundrechteck
     p.setPen(Qt.NoPen)
     p.setBrush(QColor("#2563eb"))
     p.drawRoundedRect(10, 10, size - 20, size - 20, 8, 8)
-    p.setPen(QColor("#ffffff"))
+
+    # Text
     f = QFont("Segoe UI", max(10, size // 12))
     f.setBold(True)
     p.setFont(f)
-    p.drawText(pix.rect(), Qt.AlignCenter, text)
+
+    fm = QFontMetrics(f)
+    elided_text = fm.elidedText(text, Qt.ElideRight, size - 20)  # Text passt in Rechteck
+
+    p.setPen(QColor("#ffffff"))
+    p.drawText(pix.rect(), Qt.AlignCenter, elided_text)
+
     p.end()
     return pix
 
+def get_latest_version():
+    """Prüft das neueste Release auf GitHub."""
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+    try:
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("tag_name", APP_VERSION)  # z. B. "v0.1.46"
+    except Exception as e:
+        print("Update-Check fehlgeschlagen:", e)
+    return APP_VERSION  # fallback: aktuelle Version
+
+def is_update_available():
+    latest = get_latest_version().lstrip("v")  # 'v0.1.46' → '0.1.46'
+    return FORCE_UPDATE_CHECK or version.parse(latest) > version.parse(APP_VERSION)
+
+
+# ---------------- SplashScreen (Starting Screen) ----------------
+
+class SplashScreen(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.resize(500, 250)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(20)
+
+        # App Titel
+        self.title = QLabel("Beyond Musik wird geladen…")
+        self.title.setAlignment(Qt.AlignCenter)
+        self.title.setStyleSheet("color: #3B82F6; font-size: 20px; font-weight: bold;")
+
+        # Status Text
+        self.status = QLabel("Starte Initialisierung")
+        self.status.setAlignment(Qt.AlignCenter)
+        self.status.setStyleSheet("color: #E5E7EB; font-size: 14px;")
+
+        # Ladebalken
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(15)
+        self.progress.setStyleSheet("""
+            QProgressBar { background-color: #1F2937; border-radius: 7px; }
+            QProgressBar::chunk { background-color: #3B82F6; border-radius: 7px; }
+        """)
+
+        layout.addWidget(self.title)
+        layout.addWidget(self.status)
+        layout.addWidget(self.progress)
+
+        # Hintergrund
+        self.bg_pix = QPixmap(self.size())
+        self.bg_pix.fill(Qt.transparent)
+        painter = QPainter(self.bg_pix)
+        painter.setRenderHint(QPainter.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), 25, 25)
+        painter.fillPath(path, QColor("#111827"))
+        painter.end()
+
+         # --- SOUND ABSPIELEN ---
+        self.player = QMediaPlayer()
+        self.audio_output = QAudioOutput()
+        self.player.setAudioOutput(self.audio_output)
+
+        root_dir = get_root_path()
+        soundStart_path = os.path.join(root_dir, "assets", "start.mp3")
+        sound_path = Path(soundStart_path).resolve()  # kleine MP3/WAV Datei ins Projekt legen
+        self.player.setSource(QUrl.fromLocalFile(str(sound_path)))
+        self.audio_output.setVolume(0.8)
+        #self.player.play()
+
+        # Statusmeldungen
+        self.status_map = {
+            10: "Prüfe auf Updates",
+            30: "Initialisiere Module",
+            50: "Verbinde mit Servern",
+            65: "Synchronisiere Einstellungen",
+            75: "Cache wird geleert",
+            85: "Starte Audio Engine",
+            95: "Lade Benutzeroberfläche",
+        }
+
+        # Punkte Animation (Fake Checks)
+        self.dots = ""
+        self.dot_timer = QTimer()
+        self.dot_timer.timeout.connect(self.update_dots)
+        self.dot_timer.start(500)
+
+        # Fortschritt
+        self.counter = 0
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_progress)
+        self.timer.start(100)
+
+        # Animationsobjekt behalten
+        self.fade_anim = None
+
+    def update_dots(self):
+        self.dots += "."
+        if len(self.dots) > 3:
+            self.dots = ""
+        self.status.setText(self.status.text().split("…")[0] + self.dots)
+
+    def update_progress(self):
+        self.counter += 2
+        self.progress.setValue(self.counter)
+
+        for k in sorted(self.status_map.keys()):
+            if self.counter >= k:
+                self.status.setText(self.status_map[k] + self.dots)
+
+        if self.counter >= 101:
+            self.timer.stop()
+            self.dot_timer.stop()
+            self.fade_out()
+
+    def fade_out(self):
+        self.fade_anim = QPropertyAnimation(self, b"windowOpacity")
+        self.fade_anim.setDuration(1000)
+        self.fade_anim.setStartValue(1.0)
+        self.fade_anim.setEndValue(0.0)
+        self.fade_anim.finished.connect(lambda: self.finish_splash(vlc_player))
+        self.player.play()
+        self.fade_anim.start()
+
+    def finish_splash(self, vlc_player):
+        self.main_window = OverseerPlayer(vlc_player)  # vlc_player übergeben
+        self.main_window.show()
+        self.close()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.drawPixmap(0, 0, self.bg_pix)
 
 # ---------------- Playlist Item Widget ----------------
 class PlaylistItemWidget(QWidget):
@@ -319,20 +478,247 @@ class InfoTab(QWidget):
         w_layout.addWidget(header)
 
         # Karten
-        w_layout.addWidget(InfoCard("App-Version", "#-USO52G74LBJWJV1VY3P7-v.0.1.2"))
-        w_layout.addWidget(InfoCard("Entwickler", "Beyond Development & Tobias Polzer"))
+        w_layout.addWidget(InfoCard("App-Version", "#-6MVXZPR2A9OA8XKAPA8T-v.0.1.45"))
+        w_layout.addWidget(InfoCard("Entwickler", "BeyondDevWorks & Tobias Polzer"))
         w_layout.addWidget(InfoCard("Lizenz", "MIT"))
-        w_layout.addWidget(InfoCard("Letztes Update", "2025-08-11"))
-        w_layout.addWidget(InfoCard("Support", "Kommt noch"))
+        w_layout.addWidget(InfoCard("Letztes Update", "2025-08-25"))
+        w_layout.addWidget(InfoCard("Support", "https://beyonddevworks.github.io/BDW-Site/#contact"))
 
         w_layout.addStretch()
+
+class ClickableSlider(QSlider):
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            pos = event.position().toPoint()
+            if self.orientation() == Qt.Horizontal:
+                value = QStyle.sliderValueFromPosition(
+                    self.minimum(),
+                    self.maximum(),
+                    pos.x(),
+                    self.width()
+                )
+            else:
+                value = QStyle.sliderValueFromPosition(
+                    self.minimum(),
+                    self.maximum(),
+                    self.height() - pos.y(),
+                    self.height()
+                )
+            self.setValue(value)
+            event.accept()
+        super().mousePressEvent(event)
+
+    def paintEvent(self, event):
+        # Erst Standard-Slider mit Stylesheet malen
+        super().paintEvent(event)
+
+        # Danach eigene Ticks
+        tick_interval = self.tickInterval()
+        if tick_interval <= 0:   # Schutz gegen Division durch 0
+            return
+
+        steps = (self.maximum() - self.minimum()) // tick_interval
+        if steps <= 0:
+            return
+
+        painter = QPainter(self)
+        painter.setPen(QColor(200, 200, 200, 160))  # helle graue Striche
+
+        if self.orientation() == Qt.Horizontal:
+            spacing = self.width() / steps
+            y = self.height() // 2
+            for i in range(steps + 1):
+                x = int(i * spacing)
+                painter.drawLine(x, y - 4, x, y + 4)
+        else:
+            spacing = self.height() / steps
+            x = self.width() // 2
+            for i in range(steps + 1):
+                y = int(i * spacing)
+                painter.drawLine(x - 4, y, x + 4, y)
+
+        painter.end()
+
+
+
+class EqualizerTab(QWidget):
+    def __init__(self, player: vlc.MediaPlayer, parent=None):
+        super().__init__(parent)
+        self.player = player
+        self.eq = vlc.AudioEqualizer()
+        self.player.set_equalizer(self.eq)
+
+        main_layout = QVBoxLayout(self)
+
+        # Frequenzbänder definieren
+        self.bands = [
+            (0, "60 Hz"),
+            (1, "170 Hz"),
+            (2, "310 Hz"),
+            (3, "600 Hz"),
+            (4, "1 kHz"),
+            (5, "3 kHz"),
+            (6, "6 kHz"),
+            (7, "12 kHz"),
+            (8, "14 kHz"),
+            (9, "16 kHz"),
+        ]
+
+        # Presets (Gain-Werte pro Band)
+        self.presets = {
+            "Neutral":        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            "Rock":           [5, 3, 2, 0, -2, 0, 2, 4, 5, 5],
+            "Pop":            [-1, 2, 3, 4, 3, 2, 1, 0, -1, -2],
+            "Jazz":           [0, 2, 3, 2, 0, 2, 3, 2, 1, 0],
+            "Bass Boost":     [8, 6, 4, 2, 0, -2, -4, -6, -6, -6],
+            "Treble Boost":   [-4, -2, 0, 2, 4, 6, 8, 10, 10, 10],
+            "Vocal Boost":    [-2, -1, 2, 4, 5, 5, 3, 1, 0, -1],
+            "Classical":      [0, 0, 2, 3, 2, 0, 1, 2, 3, 3],
+            "Dance":          [5, 4, 2, 0, -2, 0, 3, 6, 7, 7],
+            "Electronic":     [6, 4, 3, 0, -2, 0, 4, 7, 8, 9],
+            "Hip-Hop":        [8, 6, 4, 2, 0, -1, 2, 4, 5, 6],
+            "Reggae":         [5, 4, 2, 0, -1, 0, 3, 5, 6, 6],
+            "Movie":          [3, 2, 1, 0, 0, 2, 3, 4, 5, 5],
+            "Gaming":         [6, 5, 3, 0, -1, 2, 4, 6, 7, 8],
+            "Podcast":        [-3, -2, 0, 3, 5, 5, 4, 2, 0, -1],
+            "Soft":           [-2, -1, 0, 0, 1, 1, 0, -1, -2, -3],
+            "Party":          [7, 5, 3, 0, -1, 1, 4, 6, 7, 8],
+            "Treble Cut":     [0, 0, -2, -4, -6, -6, -4, -2, 0, 0],
+            "Bass Cut":       [-6, -5, -3, 0, 1, 0, -2, -4, -5, -6],
+        }
+
+        # Preset-Auswahl
+        self.preset_box = QComboBox()
+        self.preset_box.addItems(self.presets.keys())
+        self.preset_box.currentTextChanged.connect(self.apply_preset)
+        self.preset_box.setStyleSheet("""
+        QComboBox {
+            background-color: #1e1e1e;
+            color: #3b82f6;             /* Text blau */
+            border: 1px solid #3b82f6;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 14px;
+        }
+        QComboBox::drop-down {
+            border: none;
+            background: #3b82f6;
+            width: 24px;
+        }
+        QComboBox::down-arrow {
+            image: none;
+            border-left: 7px solid transparent;
+            border-right: 7px solid transparent;
+            border-top: 10px solid #3b82f6;   /* Pfeil in Blau */
+            margin-right: 4px;
+        }
+        QComboBox QAbstractItemView {
+            background-color: #2a2a2a;
+            border: 1px solid #3b82f6;
+            selection-background-color: #3b82f6;
+            selection-color: white;
+            color: #3b82f6;                    /* Items normal blau */
+        }
+        """)
+        main_layout.addWidget(QLabel("Preset auswählen:"))
+        main_layout.addWidget(self.preset_box)
+
+        # Slider nebeneinander
+        slider_row = QHBoxLayout()
+        self.sliders = {}
+
+        for index, label in self.bands:
+            band_layout = QVBoxLayout()
+
+            band_label = QLabel(label, alignment=Qt.AlignCenter)
+
+            self.eqslider = ClickableSlider(Qt.Vertical)  # klassischer EQ-Look
+            self.eqslider.setRange(-20, 20)       # dB-Bereich
+            self.eqslider.setValue(0)
+            self.eqslider.setTickPosition(QSlider.TicksBothSides)
+            self.eqslider.setTickInterval(5)
+            self.eqslider.setStyleSheet("""
+            QSlider::groove:vertical {
+                width: 6px;
+                background: rgba(255,255,255,0.08);
+                border-radius: 3px;
+            }
+            QSlider::handle:vertical {
+                background: #3b82f6;
+                height: 14px;
+                width: 14px;
+                border-radius: 7px;
+                margin: 0 -4px; /* verschiebt den Knopf ins Groove-Zentrum */
+            }
+            """)
+
+            self.eqslider.valueChanged.connect(
+                lambda value, i=index: self.set_band_gain(i, value)
+            )
+
+            band_layout.addWidget(band_label)
+            band_layout.addWidget(self.eqslider)
+
+            slider_row.addLayout(band_layout)
+            self.sliders[index] = self.eqslider
+
+        main_layout.addLayout(slider_row)
+        self.setLayout(main_layout)
+
+    def set_band_gain(self, band_index, gain_value):
+        """Setzt den Gain für ein bestimmtes Band"""
+        self.eq.set_amp_at_index(float(gain_value), band_index)
+        self.player.set_equalizer(self.eq)
+
+        # Automatisch speichern
+        if hasattr(self.parent(), "save_settings"):
+            self.parent().save_settings()
+
+    def apply_preset(self, preset_name):
+        """Preset-Werte auf die Slider anwenden"""
+        values = self.presets[preset_name]
+        for i, gain in enumerate(values):
+            self.sliders[i].blockSignals(True)
+            self.sliders[i].setValue(gain)
+            self.sliders[i].blockSignals(False)
+            self.eq.set_amp_at_index(float(gain), i)
+
+        self.player.set_equalizer(self.eq)
+
+        # Automatisch speichern
+        if hasattr(self.parent(), "save_settings"):
+            self.parent().save_settings()
+    
+    def get_current_eq_values(self):
+        """Gibt die aktuellen Slider-Werte als Liste zurück"""
+        return [self.sliders[i].value() for i in range(len(self.sliders))]
+
+    def set_eq_values(self, values):
+        """Setzt Slider auf gespeicherte Werte"""
+        for i, gain in enumerate(values):
+            self.sliders[i].blockSignals(True)
+            self.sliders[i].setValue(gain)
+            self.sliders[i].blockSignals(False)
+            self.eq.set_amp_at_index(float(gain), i)
+        self.player.set_equalizer(self.eq)
+    
+    def get_current_preset(self):
+        """Gibt den aktuell ausgewählten Preset-Namen zurück"""
+        return self.preset_box.currentText()
+
+    def set_preset(self, preset_name):
+        """Setzt einen Preset-Namen und wendet ihn an"""
+        if preset_name in self.presets:
+            self.preset_box.setCurrentText(preset_name)
+            self.apply_preset(preset_name)
+
 
 # ---------------- Main Player ----------------
 class OverseerPlayer(QMainWindow):
     def __init__(self, vlc_player):
         super().__init__()
         self.player = vlc_player
-        self.vlc_instance  = vlc_instance
+        self.vlc_instance = vlc.Instance()
         def get_root_path():
             # Wenn als EXE kompiliert
             if getattr(sys, 'frozen', False):
@@ -353,11 +739,13 @@ class OverseerPlayer(QMainWindow):
         # Dark Mode für Titelleiste aktivieren
         set_dark_titlebar(hwnd, True)
 
-        # state
+                # ---------------- Medienstatus ----------------
         self.playlist = []
-        self.current_index = -1
-        self.is_playing = False
         self.is_user_seeking = False
+        self.current_index = -1           # aktuell gespieltes Playlist-Item
+        self.current_media_type = None    # "playlist" oder "stream"
+        self.is_playing = False
+        self._old_volume = 100            # für Mute/Unmute
 
         # settings
         self.settings = {"volume": 80, "shuffle": False, "repeat": False, "last_playlist": []}
@@ -392,29 +780,76 @@ class OverseerPlayer(QMainWindow):
         root_layout.setContentsMargins(12, 12, 12, 12)
         self.setCentralWidget(root)
 
-        # top row with remove all and tabs
+        latest_version = get_latest_version().lstrip("v")
+
+        # -----------------------------------------------------
+        # Top Bar
+        # -----------------------------------------------------
         top_row = QHBoxLayout()
-        label = QLabel("🎧 Beyond Music | Version 0.1.2")
+        label = QLabel(f"Beyond Music")
         label.setStyleSheet("font-weight:700; font-size:18px; color:#60A5FA;")
         top_row.addWidget(label)
 
+        # Update-Button
+        btn_update = QPushButton(f"Update verfügbar! (aktuell: v{APP_VERSION} → neu: v{latest_version})")
+        btn_update.setIcon(svg_to_icon(SVG_UPDATEBTN, 20))
+        btn_update.setToolTip("Neue Version verfügbar! Jetzt herunterladen")
+        btn_update.clicked.connect(lambda: webbrowser.open("https://beyonddevworks.github.io/BDW-Site/#home"))
+        btn_update.setVisible(is_update_available())  # nur anzeigen, wenn nötig
+        btn_update.setStyleSheet("""
+            QPushButton {
+                background-color: #1e293b;   /* dunkler Hintergrund */
+                border: 2px solid #3b82f6;  /* blaue Umrandung */
+                border-radius: 8px;          /* runde Ecken */
+                padding: 6px 12px;
+                color: #09D62F;              /* helle Schrift */
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: rgba(59, 130, 246, 0.3);   /* hover blau */
+                color: #09D62F;
+            }
+            QPushButton:pressed {
+                background-color: #2563eb;   /* dunkleres Blau beim Klick */
+            }
+        """)
+        top_row.addWidget(btn_update)
+
         top_row.addStretch()
+
+        # Stop all Button
+        btn_stop_all = QPushButton()
+        btn_stop_all.setIcon(svg_to_icon(SVG_STOPALL, 20))
+        btn_stop_all.setToolTip("Stop all playing audios and streams")
+        btn_stop_all.clicked.connect(self.stop_all)
+        top_row.addWidget(btn_stop_all)
+
+        # Remove all Button
         btn_remove_all = QPushButton()
         btn_remove_all.setIcon(svg_to_icon(SVG_REMOVEALL, 20))
         btn_remove_all.setToolTip("Remove all from playlist")
         btn_remove_all.clicked.connect(self.remove_all)
         top_row.addWidget(btn_remove_all)
+
         root_layout.addLayout(top_row)
 
         # Tabs: Playlist / Webradio
         self.tabs = QTabWidget()
         self.tab_playlist = QWidget()
         self.tab_webradio = QWidget()
+        self.tab_equalizer = EqualizerTab(self.player, parent=self)  # player ist dein vlc.MediaPlayer
         self.tab_info = InfoTab()
         self.tabs.addTab(self.tab_playlist, "Playlist")
         self.tabs.addTab(self.tab_webradio, "Webradio")
+        self.tabs.addTab(self.tab_equalizer, "Equalizer")
         self.tabs.addTab(self.tab_info, "Info")
         root_layout.addWidget(self.tabs, stretch=1)
+
+        # ---------------- EQ ----------------
+        if "eq_values" in self.settings:
+            self.tab_equalizer.set_eq_values(self.settings["eq_values"])
+        if "eq_preset" in self.settings:
+            self.tab_equalizer.set_preset(self.settings["eq_preset"])
 
         # Playlist tab layout
         p_layout = QHBoxLayout(self.tab_playlist)
@@ -435,85 +870,145 @@ class OverseerPlayer(QMainWindow):
         right_panel.addStretch()
         p_layout.addLayout(right_panel, stretch=1)
 
-        # Webradio tab
+        # ---------------- Webradio Tab ----------------
         w_layout = QVBoxLayout(self.tab_webradio)
+
         # Suchfeld
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Sender suchen...")
         w_layout.addWidget(self.search_bar)
-        self.webradio_list = QListWidget()
-        w_layout.addWidget(QLabel("Webradio - klicke zum Starten"))
-        w_layout.addWidget(self.webradio_list)
-        self.webradio_list.setSpacing(6)
-        # example stations (replace with real streams)
-        self.streams = {
-            "TECHNOBASE.FM": "https://listener3.aachd.tb-group.fm/tb-hd.aac",
-            "HOUSETIME.FM": "https://listener3.aachd.tb-group.fm/ht-hd.aac",
-            "HARDBASE.FM": "https://listener1.aachd.tb-group.fm/hb-hd.aac",
-            "TRANCEBASE.FM": "https://listener3.aachd.tb-group.fm/trb-hd.aac",
-            "CORETIME.FM": "https://listener2.aachd.tb-group.fm/ct-hd.aac",
-            "CLUBTIME.FM": "https://listener1.aachd.tb-group.fm/clt-hd.aac",
-            "TEATIME.FM": "https://listener3.aachd.tb-group.fm/tt-hd.aac",
-            "REPLAY.FM": "https://listener3.aachd.tb-group.fm/rp-hd.aac",
-            "Rottal-Radio": "https://rottalpunktradio.stream.laut.fm/rottalpunktradio"
-        }
-        # Original-Liste speichern
-        self._original_streams = list(self.streams.keys())
 
-        # Liste befüllen
-        for name in self._original_streams:
-            self.webradio_list.addItem(name)
-
-        # Suche verbinden (direkt im Build, ohne extra Funktion)
-        self.search_bar.textChanged.connect(
-            lambda text: (
-                self.webradio_list.clear(),
-                [self.webradio_list.addItem(name) for name in self._original_streams if text.lower() in name.lower()]
-            )
-        )
-
-        # Klick-Event
-        self.webradio_list.itemClicked.connect(self.stream_selected)
-        self.webradio_list.setStyleSheet("""
-            QListWidget { 
+        # ScrollArea für Grid
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        w_layout.addWidget(scroll)
+        scroll.setStyleSheet("""
                 background: #161b22; 
                 border-radius: 8px; 
                 padding: 6px; 
                 border: 1px solid #1f2937; 
-                color: #dfefff;
                 outline: none; /* Fokus-Rahmen aus */
-                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-                font-size: 14px;
-                font-weight: 600;
-            }
-            QListWidget::item { 
-                border-radius: 8px;
-                padding: 6px;          
-                background: transparent;
-                border: 1px solid rgba(88,166,255,0.3);
-            }
-            QListWidget::item:hover {
-                background: rgba(88,166,255,0.08);
-                border: 1px solid rgba(88,166,255,0.5);
-                color: #dfefff;
-            }
-            QListWidget::item:selected {
-                background: rgba(0, 128, 0, 0.3);        /* leicht transparentes Grün */
-                border: 1px solid rgba(0, 128, 0, 0.8); /* kräftiger grüner Rand */
-                color: #aaffaa;                          /* hellgrüne Schrift */
-            }
         """)
+
+        # Container-Widget für Grid
+        grid_container = QWidget()
+        scroll.setWidget(grid_container)
+        self.grid_layout = QGridLayout(grid_container)
+        self.grid_layout.setSpacing(10)
+        self.grid_layout.setContentsMargins(8, 8, 8, 8)
+        grid_container.setStyleSheet("""
+                border: none !important; /* Fokus-Rahmen aus */
+        """)
+
+        # Beispiel-Streams
+        self.streams = {
+            "TECHNOBASE.FM": "https://listener1.aachd.tb-group.fm/tb-hd.aac",
+            "HOUSETIME.FM": "https://listener1.aachd.tb-group.fm/ht-hd.aac",
+            "HARDBASE.FM": "https://listener1.aachd.tb-group.fm/hb-hd.aac",
+            "TRANCEBASE.FM": "https://listener1.aachd.tb-group.fm/trb-hd.aac",
+            "CORETIME.FM": "https://listener1.aachd.tb-group.fm/ct-hd.aac",
+            "CLUBTIME.FM": "https://listener1.aachd.tb-group.fm/clt-hd.aac",
+            "TEATIME.FM": "https://listener1.aachd.tb-group.fm/tt-hd.aac",
+            "REPLAY.FM": "https://listener1.aachd.tb-group.fm/rp-hd.aac",
+            "Rottal-Radio": "https://rottalpunktradio.stream.laut.fm/rottalpunktradio"
+        }
+
+        self._original_streams = list(self.streams.keys())
+        self.stream_buttons = {}  # <--- hier wird das Dictionary angelegt
+        self.stream_boxes = {}  # Name -> Box Widget
+
+        def add_stream_box(name, row, col):
+            widget = QWidget()
+            widget.setMinimumSize(200, 120)
+            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            widget.setStyleSheet("""
+                background-color: #161b22;
+                border: 1px solid #3b82f6;
+                border-radius: 8px;
+            """)
+
+            layout = QVBoxLayout(widget)
+            layout.setContentsMargins(6, 6, 6, 6)
+            layout.setSpacing(4)
+
+            cover = QLabel()
+            cover.setPixmap(make_default_cover(48, name[0]))
+            cover.setFixedSize(48, 48)
+            cover.setAlignment(Qt.AlignCenter)
+            layout.addWidget(cover, alignment=Qt.AlignHCenter)
+            cover.setStyleSheet("""
+                background: transparent;
+                border: none !important; /* Fokus-Rahmen aus */
+            """)
+
+            label = QLabel(name)
+            label.setAlignment(Qt.AlignCenter)
+            label.setStyleSheet("""
+                background: transparent;
+                color: #dfefff;
+                font-weight: 600;
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                border: none !important; /* Fokus-Rahmen aus */
+            """)
+
+            def adjust_font():
+                w = label.width()
+                # passt die Schrift proportional an die Breite an
+                size = max(10, min(20, w // 10))  # min 10px, max 20px
+                label.setStyleSheet(f"""
+                    background: transparent;
+                    color: #dfefff;
+                    font-weight: 600;
+                    font-size: {size}px;
+                    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                    border: none !important; /* Fokus-Rahmen aus */
+                """)
+
+            label.resizeEvent = lambda event: adjust_font()
+            layout.addWidget(label)
+
+            btn = QPushButton()
+            btn.setIcon(svg_to_icon(SVG_PLAY))
+            btn.setIconSize(QSize(36, 36))
+            btn.setFixedSize(40, 40)
+            btn.clicked.connect(lambda checked, n=name: self.toggle_stream(n))
+            layout.addWidget(btn, alignment=Qt.AlignHCenter)
+
+            # Beim Abspielen ändern
+
+            self.grid_layout.addWidget(widget, row, col)
+            self.stream_boxes[name] = widget  # speichern für Search / Markierung
+                # speichern
+            self.stream_buttons[name] = btn
+
+        cols = 3
+        for index, name in enumerate(self._original_streams):
+            row = index // cols
+            col = index % cols
+            add_stream_box(name, row, col)
+
+        # Suche: Ein-/Ausblenden der Boxen
+        def filter_streams(text):
+            for name, box in self.stream_boxes.items():
+                if text.lower() in name.lower():
+                    box.show()
+                else:
+                    box.hide()
+
+        self.search_bar.textChanged.connect(filter_streams)
+
+        # Suchfeld Styling
         self.search_bar.setStyleSheet("""
             QLineEdit {
-                background-color: #0A1F44;   /* dunkles Blau */
-                color: #4DA3FF;              /* hellblau */
-                border: 2px solid #1E3A70;   /* dunklerer Rand */
+                background-color: #0A1F44;
+                color: #4DA3FF;
+                border: 2px solid #1E3A70;
                 border-radius: 8px;
                 padding: 6px 10px;
                 font-size: 14px;
             }
             QLineEdit:focus {
-                border: 2px solid #4DA3FF;   /* Glow in hellblau bei Fokus */
+                border: 2px solid #4DA3FF;
                 background-color: #0F2A5F;
             }
         """)
@@ -522,7 +1017,7 @@ class OverseerPlayer(QMainWindow):
         timeline_row = QHBoxLayout()
         self.time_cur = QLabel("00:00")
         self.time_tot = QLabel("00:00")
-        self.timeline = QSlider(Qt.Horizontal)
+        self.timeline = ClickableSlider(Qt.Horizontal)
         self.timeline.setRange(0, 1000)
         self.timeline.sliderPressed.connect(self._timeline_pressed)
         self.timeline.sliderReleased.connect(self._timeline_released)
@@ -538,6 +1033,25 @@ class OverseerPlayer(QMainWindow):
         # bottom player bar
         bar = QFrame()
         bar.setFrameShape(QFrame.StyledPanel)
+        bar.setFixedHeight(80)  # Höhe der Leiste
+        bar.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(30, 41, 59, 230),  /* leicht transparentes dunkles Blau */
+                    stop:1 rgba(17, 24, 39, 230)   /* dunkleres Blau/Grau unten */
+                );
+                border-radius: 16px;
+                border: 1px solid rgba(59, 130, 246, 180); /* sanfter blauer Rand */
+            }
+        """)
+
+        # Optional: sanfter Schatten für "Floating"-Effekt
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setOffset(0, 3)
+        shadow.setColor(QColor(0, 0, 0, 100))
+        bar.setGraphicsEffect(shadow)
         bl = QHBoxLayout(bar)
         bl.setContentsMargins(8, 8, 8, 8)
 
@@ -548,6 +1062,11 @@ class OverseerPlayer(QMainWindow):
         bl.addWidget(self.small_cover)
         self.now_label = QLabel("Keine Wiedergabe")
         bl.addWidget(self.now_label, stretch=1)
+        self.small_cover.setStyleSheet("""
+            background: transparent;
+            border-radius: 0px;   /* Hälfte der Größe → rund */
+            border: none; 
+        """)
 
         # controls center
         controls = QHBoxLayout()
@@ -633,12 +1152,17 @@ class OverseerPlayer(QMainWindow):
         bl.addLayout(controls)
 
         # volume right
+        
+        self._old_volume = self.settings["volume"]
+        self.settings = {"volume": self._old_volume}
+
         vol_layout = QHBoxLayout()
         vol_layout.addStretch()
-        vol_icon = QLabel()
-        vol_icon.setPixmap(svg_to_icon(SVG_VOLUME, 18).pixmap(18, 18))
+        vol_icon = QPushButton()
+        vol_icon.setIcon(svg_to_icon(SVG_VOLUME, 18).pixmap(18, 18))
+        vol_icon.clicked.connect(self.vol_mute)
         vol_layout.addWidget(vol_icon)
-        self.volume_slider = QSlider(Qt.Horizontal)
+        self.volume_slider = ClickableSlider(Qt.Horizontal)
         self.volume_slider.setRange(0, 100)
         self.volume_slider.setFixedWidth(160)
         self.volume_slider.setStyleSheet("""
@@ -690,20 +1214,31 @@ class OverseerPlayer(QMainWindow):
             QTabWidget::pane { 
                 border: none; 
             }
+
             QTabBar::tab { 
                 background: #121a29; 
                 color: #dfefff; 
-                padding: 6px 12px; 
-                border-radius: 6px 6px 0 0; 
-                margin-right: 2px; 
+                padding: 6px 20px; 
+                border-radius: 8px 8px 0 0; 
+                margin-right: 8px; 
+                left: 7.5%;
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                font-weight: 700;        /* dickere Schrift */
+                font-size: 14px;          /* etwas größere Schrift für bessere Lesbarkeit */
+                letter-spacing: 0.5px;    /* leichtes Tracking für bessere Erkennbarkeit */
+                border: 2px solid #1f2937; 
             }
+
             QTabBar::tab:selected { 
                 background: #1e40af; 
-                color: white; 
+                color: #ffffff; 
+                border: 2px solid #3b82f6; 
             }
+
             QTabBar::tab:hover { 
                 background: #3b82f6; 
-                color: white; 
+                color: #ffffff; 
+                border: 2px solid #60a5fa; 
             }
 
             /* Playlist / QListWidget */
@@ -872,6 +1407,11 @@ class OverseerPlayer(QMainWindow):
         self.current_index = -1
         self.update_ui_for_stop()
 
+    def stop_all(self):
+        self.stop_audio()
+        self.current_index = -1
+        self.update_ui_for_stop()
+
     def load_playlist(self, paths):
         self.playlist = []
         self.playlist_widget.clear()
@@ -899,6 +1439,7 @@ class OverseerPlayer(QMainWindow):
                 self.play_track(0)
 
     # ---------------- Playback ----------------
+
     def play_track(self, index):
         if index < 0 or index >= len(self.playlist):
             return
@@ -915,50 +1456,81 @@ class OverseerPlayer(QMainWindow):
         self.mark_stream_as_playing(None)  # Kein Stream markiert
 
     def _on_play_button_toggled(self):
-        # toggles play/pause depending on checked state
         if self.play_btn.isChecked():
-            # start or resume
-            if self.current_index == -1 and self.playlist:
+            # Start oder Resume
+            if self.current_index == -1 and self.current_media_type != "playlist" and self.playlist:
                 self.play_track(0)
             else:
                 try:
-                    self.player.play()
-                    self.is_playing = True
-                    self.play_btn.setIcon(svg_to_icon(SVG_PAUSE, 24))
-                    self.mark_stream_as_playing(None)  # Kein Stream markiert
+                    if self.current_media_type == "stream":
+                        # Stream immer neu starten
+                        current_name = self.now_label.text().replace("Stream: ", "")
+                        current_url = self.streams.get(current_name)
+                        if current_url:
+                            # Stream starten
+                            self.play_stream(current_url, current_name)
+                            # Stream markieren
+                            self.mark_stream_as_playing(current_name)
+                            # Playlist-Markierung entfernen
+                            self.mark_playlist_as_playing(-1)
+                    else:
+                        # Playlist kann pausiert/resumed werden
+                        self.player.play()
+                        self.is_playing = True
+                        self.play_btn.setIcon(svg_to_icon(SVG_PAUSE, 24))
+                        # Playlist markieren
+                        self.mark_playlist_as_playing(self.current_index)
+                        # Stream-Markierung entfernen
+                        self.mark_stream_as_playing(None)
                 except Exception:
                     pass
         else:
-            # pause
+            # Pause / Stop
             try:
-                self.player.pause()
-                self.is_playing = False
-                self.play_btn.setIcon(svg_to_icon(SVG_PLAY, 24))
+                if self.current_media_type == "playlist":
+                    self.player.pause()
+                    self.is_playing = False
+                    self.play_btn.setIcon(svg_to_icon(SVG_PLAY, 24))
+                    # Playlist bleibt markiert
+                    self.mark_playlist_as_playing(self.current_index)
+                    # Stream-Markierung entfernen
+                    self.mark_stream_as_playing(None)
+                else:
+                    # Stream stoppen + alle Markierungen entfernen
+                    self.stop_audio()
             except Exception:
                 pass
+
         self._refresh_highlight()
 
     def pause_audio(self):
-        try:
-            self.player.pause()
-            self.mark_stream_as_playing(None)  # Kein Stream markiert
-            self.is_playing = False
-            self.play_btn.setChecked(False)
-            self.play_btn.setIcon(svg_to_icon(SVG_PLAY, 24))
-        except Exception:
-            pass
-        self._refresh_highlight()
+        if self.current_media_type == "playlist":
+            try:
+                self.player.pause()
+                self.is_playing = False
+                self.play_btn.setChecked(False)
+                self.play_btn.setIcon(svg_to_icon(SVG_PLAY, 24))
+            except Exception:
+                pass
+            self._refresh_highlight()
+        else:
+            # Stream = stop
+            self.stop_audio()
 
+    # Stoppt die aktuelle Wiedergabe (Playlist oder Stream)
     def stop_audio(self):
         try:
-            self.player.stop()
-            self.mark_stream_as_playing(None)  # Kein Stream markiert
+            if self.player.is_playing():
+                self.player.stop()
         except Exception:
             pass
         self.is_playing = False
         self.play_btn.setChecked(False)
         self.play_btn.setIcon(svg_to_icon(SVG_PLAY, 24))
         self.update_ui_for_stop()
+        self.update_button_playing(None)  # alle zurücksetzen
+        self.now_label.setText("")
+        self.mark_stream_as_playing(None)
 
     def play_next(self):
         if not self.playlist:
@@ -993,6 +1565,21 @@ class OverseerPlayer(QMainWindow):
     def set_volume(self, val):
         self.player.audio_set_volume(val)
         self.settings["volume"] = val
+
+    def vol_mute(self):
+        current_vol = self.player.audio_get_volume()
+
+        if current_vol == 0:
+            # zurück zur alten Lautstärke
+            self.player.audio_set_volume(self._old_volume)
+            self.volume_slider.setValue(self._old_volume)
+            self.settings["volume"] = self._old_volume
+        else:
+            # Lautstärke merken und stummschalten
+            self._old_volume = current_vol
+            self.player.audio_set_volume(0)
+            self.volume_slider.setValue(0)
+            self.settings["volume"] = 0
 
     # ---------------- Timeline & Timer ----------------
     def _timeline_pressed(self):
@@ -1165,44 +1752,76 @@ class OverseerPlayer(QMainWindow):
     # ---------------- Webradio ----------------
 
     # Funktion um den aktiven Stream zu markieren
-    def mark_stream_as_playing(self, playing_name):
-        for i in range(self.webradio_list.count()):
-            list_item = self.webradio_list.item(i)
-            list_item.setSelected(list_item.text() == playing_name)
+    def mark_stream_as_playing(self, name):
+        for stream_name, widget in self.stream_boxes.items():
+            if stream_name == name:
+                widget.setStyleSheet("""
+                    background-color: rgba(0, 128, 0, 0.025);
+                    border: 4px solid #0f8000;
+                    border-radius: 8px;
+                """)
+            else:
+                widget.setStyleSheet("""
+                    background-color: #161b22;
+                    border: 1px solid #3b82f6;
+                    border-radius: 8px;
+                """)
 
     # Beispiel im Stream-Start (oder wo immer du den Stream startest)
-    def stream_selected(self, item):
-        name = item.text()
-        url = self.streams.get(name)
-        if url:
-            self.play_stream(url, name)
-            self.mark_stream_as_playing(name)
+    # Optional: Klick erneut auf aktiven Stream stoppt ihn
+    def toggle_stream(self, name):
+        url = self.streams[name]
+        # prüfen, ob gerade gespielt wird
+        if self.is_playing and self.now_label.text() == f"Stream: {name}":
+            self.stop_audio()
+            self.update_button_playing(None)  # alle zurücksetzen
+            self.is_playing = False
+            self.now_label.setText("")
+            self.mark_stream_as_playing(None)  # stoppen
+        else:
+            self.play_stream(url, name)  # starten
 
-    def play_stream(self, url, name):
-        # stop any file media first
-        try:
-            if self.player.is_playing():
-                self.player.stop()
-        except Exception:
-            pass
-        # load stream
+    # Stream starten (immer neu starten)
+    def play_stream(self, url, name=None):
+        # Vorherige Wiedergabe stoppen
+        self.stop_audio()
+        
+        # Stream neu laden
         media = self.vlc_instance.media_new(url)
         self.player.set_media(media)
         self.player.play()
+        self.update_button_playing(name)
+        self.is_playing = True
+        self.now_label.setText(f"Stream: {name}")
+        self.mark_stream_as_playing(name)
         self.play_btn.setChecked(True)
         self.play_btn.setIcon(svg_to_icon(SVG_PAUSE, 24))
-        self.is_playing = True
-        # mark no playlist item as active
-        self.current_index = -1
-        self._refresh_highlight()
-        # update UI
+        
+        # Markiere Stream im UI
         if name:
-            self.now_label.setText(f"Stream: {name}")  # Name anzeigen
+            self.now_label.setText(f"Stream: {name}")
         else:
-            self.now_label.setText(f"Stream: {url}")   # Fallback auf URL
+            self.now_label.setText(f"Stream: {url}")
         self.meta_label.setText("Webradio")
         self.cover_label.setPixmap(make_default_cover(260, "Stream"))
         self.small_cover.setPixmap(make_default_cover(56, "S"))
+        
+        # Playlist-Index deaktivieren
+        self.current_index = -1
+        self.mark_stream_as_playing(name)
+        self._refresh_highlight()
+    
+    def update_button_playing(self, name=None):
+        """
+        Aktualisiert alle Buttons: 
+        - der aktive Stream bekommt Pause-Icon
+        - alle anderen bekommen Play-Icon
+        """
+        for n, btn in self.stream_buttons.items():
+            if n == name:
+                btn.setIcon(svg_to_icon(SVG_PAUSE))
+            else:
+                btn.setIcon(svg_to_icon(SVG_PLAY))
 
     # ---------------- Settings ----------------
     def save_settings(self):
@@ -1210,6 +1829,11 @@ class OverseerPlayer(QMainWindow):
         self.settings["shuffle"] = self.shuffle_btn.isChecked()
         self.settings["repeat"] = self.repeat_btn.isChecked()
         self.settings["last_playlist"] = self.playlist.copy()
+
+        # ---------------- EQ ----------------
+        eq_values = self.tab_equalizer.get_current_eq_values()
+        self.settings["eq_values"] = eq_values
+        self.settings["eq_preset"] = self.tab_equalizer.get_current_preset()
         try:
             with open(CONFIG_PATH, "w", encoding="utf-8") as f:
                 json.dump(self.settings, f, indent=2, ensure_ascii=False)
@@ -1232,6 +1856,6 @@ class OverseerPlayer(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    win = OverseerPlayer(vlc_player)
-    win.show()
+    splash = SplashScreen()
+    splash.show()
     sys.exit(app.exec())
