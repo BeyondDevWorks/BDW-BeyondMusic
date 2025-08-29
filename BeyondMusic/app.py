@@ -555,6 +555,7 @@ class EqualizerTab(QWidget):
         super().__init__(parent)
         self.player = player
         self.eq = vlc.AudioEqualizer()
+        self.eq.set_preamp(12.0)  # +12 dB ~ ca. 200 %
         self.player.set_equalizer(self.eq)
 
         main_layout = QVBoxLayout(self)
@@ -727,7 +728,7 @@ class OverseerPlayer(QMainWindow):
     def __init__(self, vlc_player):
         super().__init__()
         self.player = vlc_player
-        self.vlc_instance = vlc.Instance()
+        self.vlc_instance = vlc.Instance('--gain=2.0')
         def get_root_path():
             # Wenn als EXE kompiliert
             if getattr(sys, 'frozen', False):
