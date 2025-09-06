@@ -82,7 +82,7 @@ CONFIG_PATH = os.path.join(APPDATA_DIR, CONFIG_FILENAME)
 print("Config wird gespeichert unter:", CONFIG_PATH)
 
 SUPPORTED_FORMATS = (".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac")
-APP_VERSION = "0.1.5"
+APP_VERSION = "0.1.7"
 FORCE_UPDATE_CHECK = False  # Für Development True setzen
 GITHUB_REPO = "BeyondDevWorks/BDW-BeyondMusic"  # GitHub User/Repo
 
@@ -890,15 +890,79 @@ class OverseerPlayer(QMainWindow):
 
         # ---------------- Webradio Tab ----------------
         w_layout = QVBoxLayout(self.tab_webradio)
+        top_layout = QHBoxLayout()
+        w_layout.addLayout(top_layout)
 
         # Suchfeld
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Sender suchen...")
-        w_layout.addWidget(self.search_bar)
+        top_layout.addWidget(self.search_bar)
+
+        # In der w_layout-Sektion, füge dies nach der Suchleiste ein
+        # ----------------------------------------------------
+        
+        # UKW-Button zum neuen Layout hinzufügen
+        self.ukw_filter_btn = QPushButton("UKW")
+        self.ukw_filter_btn.setCheckable(True)
+        self.ukw_filter_btn.setFixedSize(60, 30) # Macht den Button klein und kompakt
+        self.ukw_filter_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: white;
+                border-radius: 8px;
+                padding: 6px 10px;
+                font-size: 14px;
+            }
+            QPushButton:checked {
+                background-color: #20F556;
+                border: 1px solid #0C591C;
+            }
+            QPushButton:hover {
+                background-color: #1e40af;
+                border: 1px solid #1c3272;
+            }
+            QPushButton:checked:hover {
+                background-color: #17612A;
+                border: 1px solid #0C591C;
+            }
+        """)
+        top_layout.addWidget(self.ukw_filter_btn)
+
+        # Featured-Button zum neuen Layout hinzufügen
+        self.featured_filter_btn = QPushButton("Featured")
+        self.featured_filter_btn.setCheckable(True)
+        self.featured_filter_btn.setFixedSize(90, 30) # Etwas breiter für den längeren Text
+        self.featured_filter_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: white;
+                border-radius: 8px;
+                padding: 6px 10px;
+                font-size: 14px;
+            }
+            QPushButton:checked {
+                background-color: #20F556;
+                border: 1px solid #0C591C;
+            }
+            QPushButton:hover {
+                background-color: #1e40af;
+                border: 1px solid #1c3272;
+            }
+            QPushButton:checked:hover {
+                background-color: #17612A;
+                border: 1px solid #0C591C;
+            }
+        """)
+        top_layout.addWidget(self.featured_filter_btn)
+
+        # Um sicherzustellen, dass die Suchleiste den meisten Platz einnimmt,
+        # kannst du einen Stretch-Faktor hinzufügen:
+        top_layout.setStretch(0, 1) # Index 0 ist die Suchleiste, Stretch-Faktor 1
 
         # ScrollArea für Grid
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         w_layout.addWidget(scroll)
         scroll.setStyleSheet("""
                 background: #161b22; 
@@ -909,26 +973,28 @@ class OverseerPlayer(QMainWindow):
         """)
 
         # Container-Widget für Grid
-        grid_container = QWidget()
-        scroll.setWidget(grid_container)
-        self.grid_layout = QGridLayout(grid_container)
+        self.grid_container = QWidget()
+        scroll.setWidget(self.grid_container)
+        self.grid_layout = QGridLayout(self.grid_container)
         self.grid_layout.setSpacing(10)
         self.grid_layout.setContentsMargins(8, 8, 8, 8)
-        grid_container.setStyleSheet("""
+        self.grid_container.setStyleSheet("""
                 border: none !important; /* Fokus-Rahmen aus */
         """)
 
         # Beispiel-Streams
         self.streams = {
-            "TECHNOBASE.FM": "https://listener1.aachd.tb-group.fm/tb-hd.aac",
-            "HOUSETIME.FM": "https://listener1.aachd.tb-group.fm/ht-hd.aac",
-            "HARDBASE.FM": "https://listener1.aachd.tb-group.fm/hb-hd.aac",
-            "TRANCEBASE.FM": "https://listener1.aachd.tb-group.fm/trb-hd.aac",
-            "CORETIME.FM": "https://listener1.aachd.tb-group.fm/ct-hd.aac",
-            "CLUBTIME.FM": "https://listener1.aachd.tb-group.fm/clt-hd.aac",
-            "TEATIME.FM": "https://listener1.aachd.tb-group.fm/tt-hd.aac",
-            "REPLAY.FM": "https://listener1.aachd.tb-group.fm/rp-hd.aac",
-            "Rottal-Radio": "https://rottalpunktradio.stream.laut.fm/rottalpunktradio"
+            "TECHNOBASE.FM": {"url": "https://listener1.aachd.tb-group.fm/tb-hd.aac", "type": "web", "featured": True},
+            "HOUSETIME.FM": {"url": "https://listener1.aachd.tb-group.fm/ht-hd.aac", "type": "web", "featured": False},
+            "HARDBASE.FM": {"url": "https://listener1.aachd.tb-group.fm/hb-hd.aac", "type": "web", "featured": False},
+            "TRANCEBASE.FM": {"url": "https://listener1.aachd.tb-group.fm/trb-hd.aac", "type": "web", "featured": False},
+            "CORETIME.FM": {"url": "https://listener1.aachd.tb-group.fm/ct-hd.aac", "type": "web", "featured": False},
+            "CLUBTIME.FM": {"url": "https://listener1.aachd.tb-group.fm/clt-hd.aac", "type": "web", "featured": False},
+            "TEATIME.FM": {"url": "https://listener1.aachd.tb-group.fm/tt-hd.aac", "type": "web", "featured": False},
+            "REPLAY.FM": {"url": "https://listener1.aachd.tb-group.fm/rp-hd.aac", "type": "web", "featured": False},
+            "Rottal-Radio": {"url": "https://rottalpunktradio.stream.laut.fm/rottalpunktradio", "type": "web", "featured": True},
+            "Antenne Bayern": {"url": "https://stream.antenne.de/antenne/stream/aacp", "type": "ukw", "featured": False}, # Beispiel für einen UKW-Sender
+            "Maximal Radio": {"url": "http://radiotrausnitz.cast.addradio.de/radiotrausnitz/live/mp3/high?ar-distributor=f0b7", "type": "ukw", "featured": False} # Beispiel für einen UKW-Sender
         }
 
         self._original_streams = list(self.streams.keys())
@@ -937,7 +1003,8 @@ class OverseerPlayer(QMainWindow):
 
         def add_stream_box(name, row, col):
             widget = QWidget()
-            widget.setMinimumSize(200, 120)
+            widget.setMinimumSize(200, 175)
+            widget.setMaximumSize(200, 175)
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             widget.setStyleSheet("""
                 background-color: #161b22;
@@ -989,8 +1056,11 @@ class OverseerPlayer(QMainWindow):
             btn.setIcon(svg_to_icon(SVG_PLAY))
             btn.setIconSize(QSize(36, 36))
             btn.setFixedSize(40, 40)
-            btn.clicked.connect(lambda checked, n=name: self.toggle_stream(n))
+            # In der Funktion, die die Buttons erstellt:
+            btn.clicked.connect(lambda checked, n=name, u=self.streams[name]['url']: self.toggle_stream(checked, n, u))
             layout.addWidget(btn, alignment=Qt.AlignHCenter)
+
+            layout.addSpacing(10) 
 
             # Beim Abspielen ändern
 
@@ -999,21 +1069,16 @@ class OverseerPlayer(QMainWindow):
                 # speichern
             self.stream_buttons[name] = btn
 
-        cols = 3
+        cols = 5  # Ein initialer Wert für die korrekte Anordnung beim ersten Mal
         for index, name in enumerate(self._original_streams):
             row = index // cols
             col = index % cols
-            add_stream_box(name, row, col)
+            add_stream_box(name, row, col) # Die Methode add_stream_box füllt das stream_boxes-Dictionary.
 
-        # Suche: Ein-/Ausblenden der Boxen
-        def filter_streams(text):
-            for name, box in self.stream_boxes.items():
-                if text.lower() in name.lower():
-                    box.show()
-                else:
-                    box.hide()
+        self.search_bar.textChanged.connect(lambda: self.update_stream_grid())
+        self.ukw_filter_btn.clicked.connect(lambda: self.update_stream_grid())
+        self.featured_filter_btn.clicked.connect(lambda: self.update_stream_grid())
 
-        self.search_bar.textChanged.connect(filter_streams)
 
         # Suchfeld Styling
         self.search_bar.setStyleSheet("""
@@ -1348,7 +1413,6 @@ class OverseerPlayer(QMainWindow):
         self.play_btn.setObjectName("playButton")
 
 
-
     # ---------------- Drag & Drop ----------------
     def dragEnterEvent(self, ev):
         if ev.mimeData().hasUrls():
@@ -1457,7 +1521,6 @@ class OverseerPlayer(QMainWindow):
                 self.play_track(0)
 
     # ---------------- Playback ----------------
-
     def play_track(self, index):
         if index < 0 or index >= len(self.playlist):
             return
@@ -1768,6 +1831,76 @@ class OverseerPlayer(QMainWindow):
         self._refresh_highlight()
 
     # ---------------- Webradio ----------------
+    def tte(self):
+        # Starte einen einmaligen Timer, der nach 50 Millisekunden die Methode aufruft
+        QTimer.singleShot(5000, self.update_stream_grid)
+
+    def resizeEvent(self, event):
+        # Rufe die Methode auf, die das Layout neu berechnet
+        self.update_stream_grid()
+        super().resizeEvent(event)
+
+    def update_stream_grid(self):
+        if not hasattr(self, 'grid_container'):
+            return
+
+        # Lösche alle alten Widgets aus dem Layout, um sie neu anzuordnen
+        for i in reversed(range(self.grid_layout.count())):
+            item = self.grid_layout.itemAt(i)
+            if item:
+                widget = item.widget()
+                if widget:
+                    self.grid_layout.removeWidget(widget)
+                    widget.hide()
+
+        # Erstelle eine gefilterte Liste der Streams
+        visible_streams = []
+        search_text = self.search_bar.text().lower()
+        is_ukw_filter_active = self.ukw_filter_btn.isChecked()
+        is_featured_filter_active = self.featured_filter_btn.isChecked()
+
+        for name, data in self.streams.items():
+            if search_text not in name.lower():
+                continue
+            if is_ukw_filter_active and data.get('type') != 'ukw':
+                continue
+            if is_featured_filter_active and not data.get('featured'):
+                continue
+            visible_streams.append(name)
+
+        # Berechne die Anzahl der Spalten und Zeilen basierend auf der FENSTERGRÖßE
+        container_width = self.grid_container.width()
+        container_height = self.grid_container.height()
+
+        box_width = 200
+        box_height = 120
+        spacing = 5
+
+        min_width_for_5_cols = (box_width * 5) + (spacing * 4)
+
+        if container_width >= min_width_for_5_cols:
+            cols = 5
+        else:
+            cols = max(1, (container_width // (box_width + spacing)))
+
+        # Hier wird der Fehler behoben: Entferne diese doppelte Berechnung!
+        # cols = max(1, (container_width // (box_width + spacing)))
+
+        # Berechne die maximale Anzahl an Zeilen, die in den Container passen
+        rows = max(1, (container_height // (box_height + spacing)))
+                
+        # Begrenze die Anzahl der angezeigten Streams auf die maximale Anzahl, die hineinpasst
+        max_items = cols * rows
+        
+        # Füge die sichtbaren Boxen in das Grid ein
+        for index, name in enumerate(visible_streams):
+            if index >= max_items:
+                break
+            row = index // cols
+            col = index % cols
+            widget = self.stream_boxes[name]
+            self.grid_layout.addWidget(widget, row, col)
+            widget.show()
 
     # Funktion um den aktiven Stream zu markieren
     def mark_stream_as_playing(self, name):
@@ -1787,17 +1920,20 @@ class OverseerPlayer(QMainWindow):
 
     # Beispiel im Stream-Start (oder wo immer du den Stream startest)
     # Optional: Klick erneut auf aktiven Stream stoppt ihn
-    def toggle_stream(self, name):
-        url = self.streams[name]
-        # prüfen, ob gerade gespielt wird
+    def toggle_stream(self, checked, name, url):
+        # Jetzt hat die Methode 4 Argumente (inkl. self),
+        # was mit den 3 übergebenen (checked, name, url) übereinstimmt
+        # Das checked-Argument kannst du einfach ignorieren, da es nicht benötigt wird
+
+        # Optional: Klick erneut auf aktiven Stream stoppt ihn
         if self.is_playing and self.now_label.text() == f"Stream: {name}":
             self.stop_audio()
-            self.update_button_playing(None)  # alle zurücksetzen
+            self.update_button_playing(None) # alle zurücksetzen
             self.is_playing = False
             self.now_label.setText("")
-            self.mark_stream_as_playing(None)  # stoppen
+            self.mark_stream_as_playing(None) # stoppen
         else:
-            self.play_stream(url, name)  # starten
+            self.play_stream(url, name) # starte den Stream
 
     # Stream starten (immer neu starten)
     def play_stream(self, url, name=None):
@@ -1841,6 +1977,36 @@ class OverseerPlayer(QMainWindow):
             else:
                 btn.setIcon(svg_to_icon(SVG_PLAY))
 
+    # Aktualisiere die filter_by_ukw-Methode
+    def filter_by_ukw(self):
+        is_ukw_filter_active = self.ukw_filter_btn.isChecked()
+        if is_ukw_filter_active:
+            self.featured_filter_btn.setChecked(False) # Deaktiviere den anderen Filter
+        
+        # ... Rest der Logik wie zuvor
+        for name, box in self.stream_boxes.items():
+            stream_type = self.streams[name].get('type', 'web')
+            if not is_ukw_filter_active or stream_type == 'ukw':
+                box.show()
+            else:
+                box.hide()
+
+    # Und aktualisiere die filter_by_featured-Methode
+    def filter_by_featured(self):
+        is_featured_filter_active = self.featured_filter_btn.isChecked()
+        if is_featured_filter_active:
+            self.ukw_filter_btn.setChecked(False) # Deaktiviere den anderen Filter
+        
+        # ... Rest der Logik wie zuvor
+        for name, box in self.stream_boxes.items():
+            is_featured = self.streams[name].get('featured', False)
+            if not is_featured_filter_active or is_featured:
+                box.show()
+            else:
+                box.hide()
+
+##
+        self.tte()
     # ---------------- Settings ----------------
     def save_settings(self):
         self.settings["volume"] = self.volume_slider.value()
